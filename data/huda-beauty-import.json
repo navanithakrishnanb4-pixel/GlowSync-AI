@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "products": [
+    {
+      "id": "huda-beauty:TODO-STABLE-SLUG",
+      "brand": "huda-beauty",
+      "name": "TODO: exact product name from the official listing",
+      "category": "TODO: one of blush, bodycare, concealer, contour, eyebrow, eyeliner, eyeshadow, foundation, fragrance, haircare, highlighter, lip-balm, lip-gloss, lip-liner, lipstick, mascara, nails, other, powder, primer, sets, setting-spray, skincare, tools",
+      "url": "https://hudabeauty.com/TODO-official-product-page",
+      "image": "https://hudabeauty.com/TODO-official-image.jpg",
+      "source_url": "https://hudabeauty.com/TODO-page-you-observed-this-on",
+      "observed_at": 1789919241,
+      "variants": [
+        {
+          "id": "TODO-variant-id-or-shade-slug",
+          "name": "TODO: published shade or variant name",
+          "price_inr": null,
+          "mrp_inr": null,
+          "available": null,
+          "url": "https://hudabeauty.com/TODO-official-product-page"
+        }
+      ]
+    }
+  ]
+}

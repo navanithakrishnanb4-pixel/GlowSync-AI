@@ -270,5 +270,208 @@
       "images-static.nykaa.com"
     ],
     "coverage": "supplier-feed-needed"
+  },
+  {
+    "id": "iba",
+    "name": "Iba",
+    "website": "https://ibacosmetics.com",
+    "feed_base": "https://ibacosmetics.com",
+    "allowed_hosts": [
+      "ibacosmetics.com",
+      "www.ibacosmetics.com"
+    ],
+    "image_hosts": [
+      "ibacosmetics.com",
+      "www.ibacosmetics.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "mcaffeine",
+    "name": "mCaffeine",
+    "website": "https://mcaffeine.com",
+    "feed_base": "https://mcaffeine.com",
+    "allowed_hosts": [
+      "mcaffeine.com",
+      "www.mcaffeine.com"
+    ],
+    "image_hosts": [
+      "mcaffeine.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "minimalist",
+    "name": "Minimalist",
+    "website": "https://www.beminimalist.co",
+    "feed_base": "https://www.beminimalist.co",
+    "allowed_hosts": [
+      "www.beminimalist.co",
+      "beminimalist.co"
+    ],
+    "image_hosts": [
+      "www.beminimalist.co",
+      "beminimalist.co",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "bella-vita",
+    "name": "Bella Vita Organic",
+    "website": "https://bellavitaorganic.com",
+    "feed_base": "https://bellavitaorganic.com",
+    "allowed_hosts": [
+      "bellavitaorganic.com",
+      "www.bellavitaorganic.com"
+    ],
+    "image_hosts": [
+      "bellavitaorganic.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "dot-and-key",
+    "name": "Dot & Key",
+    "website": "https://dotandkey.com",
+    "feed_base": "https://dotandkey.com",
+    "allowed_hosts": [
+      "dotandkey.com",
+      "www.dotandkey.com"
+    ],
+    "image_hosts": [
+      "dotandkey.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "mamaearth",
+    "name": "Mamaearth",
+    "website": "https://mamaearth.in",
+    "feed_base": "https://mamaearth.in",
+    "allowed_hosts": [
+      "mamaearth.in"
+    ],
+    "image_hosts": [
+      "mamaearth.in",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "dr-sheths",
+    "name": "Dr Sheth's",
+    "website": "https://drsheths.com",
+    "feed_base": "https://drsheths.com",
+    "allowed_hosts": [
+      "drsheths.com"
+    ],
+    "image_hosts": [
+      "drsheths.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "the-derma-co",
+    "name": "The Derma Co",
+    "website": "https://thedermaco.com",
+    "feed_base": "https://thedermaco.com",
+    "allowed_hosts": [
+      "thedermaco.com"
+    ],
+    "image_hosts": [
+      "thedermaco.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "bombay-shaving-company",
+    "name": "Bombay Shaving Company",
+    "website": "https://bombayshavingcompany.com",
+    "feed_base": "https://bombayshavingcompany.com",
+    "allowed_hosts": [
+      "bombayshavingcompany.com"
+    ],
+    "image_hosts": [
+      "bombayshavingcompany.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "arata",
+    "name": "Arata",
+    "website": "https://arata.in",
+    "feed_base": "https://arata.in",
+    "allowed_hosts": [
+      "arata.in"
+    ],
+    "image_hosts": [
+      "arata.in",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "aqualogica",
+    "name": "Aqualogica",
+    "website": "https://aqualogica.in",
+    "feed_base": "https://aqualogica.in",
+    "allowed_hosts": [
+      "aqualogica.in"
+    ],
+    "image_hosts": [
+      "aqualogica.in",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "juicy-chemistry",
+    "name": "Juicy Chemistry",
+    "website": "https://juicychemistry.com",
+    "feed_base": "https://juicychemistry.com",
+    "allowed_hosts": [
+      "juicychemistry.com"
+    ],
+    "image_hosts": [
+      "juicychemistry.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "earth-rhythm",
+    "name": "Earth Rhythm",
+    "website": "https://earthrhythm.com",
+    "feed_base": "https://earthrhythm.com",
+    "allowed_hosts": [
+      "earthrhythm.com"
+    ],
+    "image_hosts": [
+      "earthrhythm.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
+  },
+  {
+    "id": "clensta",
+    "name": "Clensta",
+    "website": "https://clensta.com",
+    "feed_base": "https://clensta.com",
+    "allowed_hosts": [
+      "clensta.com"
+    ],
+    "image_hosts": [
+      "clensta.com",
+      "cdn.shopify.com"
+    ],
+    "coverage": "feed"
   }
 ]
