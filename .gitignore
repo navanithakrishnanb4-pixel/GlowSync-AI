@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 local.db*
 .session-key
+data/ai-settings.json
 .env
 *.log
 node_modules/

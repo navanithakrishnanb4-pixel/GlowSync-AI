@@ -7,14 +7,16 @@ import math
 import os
 import re
 import secrets
+import shutil
 import sqlite3
+import subprocess
 import threading
 import time
 import uuid
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from flask import Flask, Response, g, jsonify, render_template, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -42,6 +44,8 @@ def create_app(database=None, testing=False):
  initialize(db_path)
  lock=threading.Lock()
  job={'running':False,'message':'No refresh running.','results':[],'finished_at':None,'owner':None}
+ ai_lock=threading.Lock()
+ ai_job={'running':False,'message':'','ok':None,'model':None,'finished_at':None}
 
  def db():
   if 'db' not in g: g.db=connect(app.config['DATABASE'])
@@ -443,7 +447,210 @@ def create_app(database=None, testing=False):
   return jsonify(palette=palette,settings=settings,shade_suggestions=suggestions[:12],shade_suggestion_count=len(suggestions),
    note='Foundation suggestions use broad, editorial interpretations of published shade names. They are not measured or calibrated matches. Numeric-only shades are not inferred; swatch before purchasing.')
 
+ @app.get('/api/ai/status')
+ def ai_status():
+  installed=ollama_installed_models()
+  return jsonify(
+   cli_installed=ollama_cli_installed(),
+   server_running=installed is not None,
+   installed_models=installed or [],
+   active_model=ACTIVE_MODEL['id'],
+   active_model_ready=bool(installed and any(ACTIVE_MODEL['id']==name or name.startswith(ACTIVE_MODEL['id']+':') or ACTIVE_MODEL['id'].startswith(name) for name in installed)),
+   curated_models=CURATED_MODELS,
+   job={k:v for k,v in ai_job.items()},
+  )
+
+ @app.post('/api/ai/pull')
+ @admin_required
+ def ai_pull():
+  model=str(body().get('model','')).strip()
+  if model not in CURATED_MODEL_IDS: return error('Choose one of the listed models.')
+  if not ollama_cli_installed(): return error('Ollama is not installed on this machine. Install it from ollama.com first.')
+  if not ai_lock.acquire(blocking=False): return error('A model download is already running.',409)
+  ai_job.update(running=True,message=f'Starting download of {model}…',ok=None,model=model,finished_at=None)
+
+  def run_pull():
+   try:
+    proc=subprocess.Popen(['ollama','pull',model],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
+    buf=''
+    while True:
+     ch=proc.stdout.read(1)
+     if ch=='' and proc.poll() is not None: break
+     if ch in ('\r','\n'):
+      if buf.strip(): ai_job['message']=buf.strip()
+      buf=''
+     else: buf+=ch
+    if buf.strip(): ai_job['message']=buf.strip()
+    code=proc.wait()
+    if code==0:
+     save_active_model(model)
+     ai_job.update(ok=True,message=f'{model} is ready.')
+    else:
+     ai_job.update(ok=False,message=f'ollama pull exited with code {code}.')
+   except Exception as exc:
+    ai_job.update(ok=False,message=f'Download failed: {exc}')
+   finally:
+    ai_job.update(running=False,finished_at=int(time.time()))
+    ai_lock.release()
+
+  threading.Thread(target=run_pull,daemon=True).start()
+  return jsonify(ok=True),202
+
+ @app.post('/api/chat')
+ def chat():
+  data=body();message=str(data.get('message','')).strip()
+  if not message: return error('Say something to search the catalogue.')
+  if len(message)>300: return error('Keep messages under 300 characters.')
+  text=norm(message);words=set(re.findall(r'[a-z0-9]+',text))
+
+  brand=next((b['id'] for b in BRANDS if norm(b['name']) in text or b['id'] in words),None)
+  category=next((cid for cid,name in CATEGORIES.items() if norm(name) in text or cid in words or any(w in words for w in norm(name).split())),None)
+  matched_concern=None
+  if not category:
+   concern_words={'dry':'skincare','oily':'skincare','acne':'skincare','pimple':'skincare','sensitive':'skincare',
+    'moisturizer':'skincare','moisturiser':'skincare','moisturizing':'skincare','serum':'skincare','sunscreen':'skincare',
+    'spf':'skincare','cleanser':'skincare','toner':'skincare','skin':'skincare','hair':'haircare','shampoo':'haircare',
+    'conditioner':'haircare','scalp':'haircare','perfume':'fragrance','scent':'fragrance','deodorant':'fragrance',
+    'body':'bodycare','lotion':'bodycare','soap':'bodycare'}
+   matched_concern=next((k for k in concern_words if k in words),None)
+   if matched_concern: category=concern_words[matched_concern]
+  region_words={'face':'face','lips':'lips','lip':'lips','eyes':'eyes','eye':'eyes','brows':'brows','brow':'brows'}
+  region=None if category else next((v for k,v in region_words.items() if k in words and v in REGIONS),None)
+  finish=next((f for f in ('matte','radiant','satin') if f in words),None)
+  m=re.search(r'(?:under|below|less than|upto|up to|within)\s*(?:inr|rs\.?|₹)?\s*(\d+)',text)
+  max_p=float(m.group(1))*100 if m else None
+  want_available=bool({'stock','available','instock'}&words)
+
+  # Whatever's left after stripping recognized entities becomes a free-text search,
+  # the same way /api/products' `q` filter works, so words like "compact" or a
+  # product name still narrow the results even without an exact category match.
+  stop={'under','below','less','than','upto','up','to','within','stock','available','instock',
+   'rs','inr','a','an','the','for','with','in','of','and','me','show','find','looking','want',
+   'need','please','some','any','products','product','have','has','get','give','can','you','i',
+   'hi','hey','hello','yo','sup','thanks','thank','ok','okay','what','do','does','is','are',
+   'my','your','something','looking','like','how','are','there'}
+  consumed=set(stop)
+  if brand: consumed|=set(norm(BY_BRAND[brand]['name']).split())|{brand}
+  if category: consumed|=set(norm(CATEGORIES[category]).split())|{category}
+  if matched_concern: consumed.add(matched_concern)
+  if finish: consumed.add(finish)
+  if m: consumed|=set(m.group(0).split())
+  leftover=[w for w in re.findall(r'[a-z0-9]+',text) if w not in consumed and not w.isdigit() and len(w)>=3]
+
+  clauses=['active=1'];params=[]
+  if brand: clauses.append('brand=?');params.append(brand)
+  if category: clauses.append('category=?');params.append(category)
+  elif region:
+   cs=REGIONS[region];clauses.append('category IN ('+','.join('?' for _ in cs)+')');params.extend(cs)
+  if finish: clauses.append('finish=?');params.append(finish)
+  for word in leftover:
+   clauses.append("search LIKE ? ESCAPE '\\'");params.append('%'+word.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%')
+
+  understood=any([brand,category,region,finish,max_p,want_available,leftover])
+  rows=db().execute('SELECT data FROM catalog_products WHERE '+' AND '.join(clauses),params).fetchall() if understood else []
+  products=[]
+  for row in rows:
+   p=json.loads(row['data']);vs=p['variants']
+   if max_p is not None: vs=[v for v in vs if v.get('price') is not None and v['price']<=max_p]
+   if want_available: vs=[v for v in vs if v.get('available') is True]
+   if not vs: continue
+   p['matching_variant_ids']=[v['id'] for v in vs]
+   p['display_variant_id']=next((v['id'] for v in vs if v.get('available') is True),vs[0]['id'])
+   products.append(p)
+  products.sort(key=lambda p:norm(p['name']))
+  results=[public_product(p) for p in products[:8]]
+
+  if not understood:
+   reply='I can help you search the catalogue — try "matte lipsticks under 500" or "Lakmé foundations in stock".'
+  elif not results:
+   reply="I couldn't find anything matching that. Try a different brand, category or a higher budget."
+  else:
+   bits=[]
+   if brand: bits.append(BY_BRAND[brand]['name'])
+   if category: bits.append(CATEGORIES[category].lower())
+   elif region: bits.append(region)
+   if finish: bits.append(finish+' finish')
+   if max_p is not None: bits.append(f'under ₹{max_p/100:,.0f}')
+   if leftover and not (brand or category or region): bits.append('"'+' '.join(leftover)+'"')
+   reply=f"Found {len(results)} match{'es' if len(results)!=1 else ''} for {' · '.join(bits) or message}."
+  ai_reply=ollama_reply(message,results)
+  used_ai=ai_reply is not None
+  if used_ai: reply=ai_reply
+  return jsonify(reply=reply,products=results,understood=understood,ai=used_ai)
+
  return app
+
+OLLAMA_URL=os.environ.get('GLOWSYNC_OLLAMA_URL','http://127.0.0.1:11434/api/generate')
+OLLAMA_BASE=OLLAMA_URL.rsplit('/api/',1)[0]
+AI_SETTINGS_PATH=ROOT/'data'/'ai-settings.json'
+# There is no cosmetics-specific local language model publicly available.
+# These are general-purpose instruction models picked only for being small
+# enough to run on an ordinary laptop; sizes are approximate download sizes.
+CURATED_MODELS=[
+ {'id':'llama3.2','label':'Llama 3.2 (3B)','approx_size':'~2.0 GB','note':'Good general-purpose default; fast on most laptops.'},
+ {'id':'phi3:mini','label':'Phi-3 Mini (3.8B)','approx_size':'~2.2 GB','note':'Strong at following instructions; very fast.'},
+ {'id':'qwen2.5:3b','label':'Qwen 2.5 (3B)','approx_size':'~1.9 GB','note':'Solid all-rounder with good multilingual support.'},
+ {'id':'gemma2:2b','label':'Gemma 2 (2B)','approx_size':'~1.6 GB','note':'Smallest and fastest; somewhat lower answer quality.'},
+]
+CURATED_MODEL_IDS={m['id'] for m in CURATED_MODELS}
+
+def load_active_model():
+ try: return json.loads(AI_SETTINGS_PATH.read_text(encoding='utf-8')).get('model') or os.environ.get('GLOWSYNC_OLLAMA_MODEL','llama3.2')
+ except (FileNotFoundError,ValueError): return os.environ.get('GLOWSYNC_OLLAMA_MODEL','llama3.2')
+
+def save_active_model(model_id):
+ AI_SETTINGS_PATH.write_text(json.dumps({'model':model_id}),encoding='utf-8')
+ ACTIVE_MODEL['id']=model_id
+
+ACTIVE_MODEL={'id':load_active_model()}
+
+def ollama_cli_installed():
+ return shutil.which('ollama') is not None
+
+def ollama_installed_models(timeout=2):
+ """Returns the list of model names Ollama already has pulled, or None if
+ the Ollama server isn't reachable at all (not installed, not running)."""
+ try:
+  with urlopen(OLLAMA_BASE+'/api/tags',timeout=timeout) as resp:
+   data=json.loads(resp.read().decode('utf-8'))
+  return [m.get('name') for m in data.get('models',[])]
+ except Exception:
+  return None
+
+def ollama_reply(message,products,timeout=8):
+ """Ask a locally-running Ollama model to write a short, natural reply about
+ the already-selected real products. Returns None on any failure (Ollama not
+ installed, not running, wrong model, slow, bad response) so the caller can
+ fall back to the deterministic templated reply. The model is never allowed
+ to introduce products of its own: it only receives names/brand/price/
+ availability already pulled from the real catalogue, and is instructed to
+ stick to that list, so this cannot hallucinate new products into the UI
+ (the product cards shown to the user always come from the real query, not
+ from the model's text)."""
+ if not products: return None
+ lines=[]
+ for p in products[:8]:
+  v=next((x for x in p['variants'] if x['id']==p.get('display_variant_id')),p['variants'][0] if p['variants'] else {})
+  price=f"₹{v['price']/100:,.0f}" if v.get('price') is not None else 'price unavailable'
+  stock='in stock' if v.get('available') else ('out of stock' if v.get('available') is False else 'stock unknown')
+  lines.append(f"- {p['name']} ({p['brand']}, {CATEGORIES.get(p['category'],p['category'])}, {price}, {stock})")
+ prompt=('You are the in-app assistant for GlowSync, a cosmetics catalogue app. '
+  'A user asked: "'+message+'"\n\n'
+  'Here are the ONLY products you may mention, already matched from the real catalogue:\n'
+  +'\n'.join(lines)+
+  '\n\nWrite a short, warm, 2-3 sentence reply recommending from this list only. '
+  'Never mention a product, brand, price or shade that is not in the list above. '
+  'Do not invent availability, ratings or claims not shown above. '
+  'Do not use markdown.')
+ try:
+  payload=json.dumps({'model':ACTIVE_MODEL['id'],'prompt':prompt,'stream':False}).encode('utf-8')
+  req=Request(OLLAMA_URL,data=payload,headers={'Content-Type':'application/json'},method='POST')
+  with urlopen(req,timeout=timeout) as resp:
+   out=json.loads(resp.read().decode('utf-8'))
+  text=str(out.get('response','')).strip()
+  return text or None
+ except Exception:
+  return None
 
 def source_error(exc):
  from urllib.error import HTTPError,URLError
